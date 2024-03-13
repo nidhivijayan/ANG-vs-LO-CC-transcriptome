@@ -26,8 +26,4 @@ Trinotate Trinotate2.sqlite LOAD_swissprot_blastp ../BLAST/swissprot.blastp.outf
 
 Trinotate Trinotate.sqlite report > Trinotate_v2.xls
 
-Trinotate --db <sqlite.db> --init \
-           --gene_trans_map <file> \
-           --transcript_fasta <file> \
-           --transdecoder_pep <file>
 
