@@ -116,4 +116,11 @@ df <-
 View(df)
 df <- go_df %>% separate(gene_ontology_BLASTP, sep = "^", into = colmn, remove = FALSE)
 
-View(cts_ed)
+#Make bar plot of enriched GO terms
+sym_go<-read.delim("SYM GOseq_v2.txt",header=TRUE)
+sym_GO_fig<-ggplot(sym_go,aes(x=GeneRatio, 
+                              y=reorder(term,+GeneRatio), 
+                              fill=ontology)) +
+geom_bar(stat="identity") +facet_grid(ontology~.,drop=TRUE,space = "free",scales="free")+scale_fill_manual(values = c("#887BB0","#0C1446","#2B7C85"))+theme(axis.text.x =element_text(angle=30,size=12,hjust=1))+
+  ylab(" ")
+
