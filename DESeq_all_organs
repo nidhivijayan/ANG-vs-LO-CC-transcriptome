@@ -13,8 +13,33 @@ sampleinfo_all<-read.delim("sample_data_all.txt")
 dds_a<-DESeqDataSetFromMatrix(countData = cts_all,colData = sampleinfo_all, design=~SymState)
 dds_deseq_all <- DESeq(dds_a)
 keep_all <- rowSums(counts(dds_deseq_all) >= 10)>=3
-
 dds_deseq_all <- dds_deseq_all[keep_all,]
+
+#Calculate the variance for each gene
+variances_1 <- apply(assay(dds_deseq_all), 1, var)
+
+# Determine the upper quartile variance cutoff value
+upper_var1 <- quantile(variances_1, 0.75)
+
+# Filter the data choosing only genes whose variances are in the upper quartile
+df_by_var1 <- data.frame(assay(dds_deseq_all)) %>%
+  dplyr::filter(variances_1 > upper_var1)
+
+heatmap2 <- pheatmap(
+  df_by_var1,
+  cluster_rows = TRUE, # Cluster the rows of the heatmap (genes in this case)
+  cluster_cols = TRUE, # Cluster the columns of the heatmap (samples),
+  show_rownames = FALSE, # There are too many genes to clearly show the labels
+  main = "Variance Heatmap",
+  annotation_col = sampleinfo2,annotation_colors = my_colour,
+  colorRampPalette(c(
+    "deepskyblue",
+    "black",
+    "yellow"
+  ))(25
+  ),
+  scale = "row" # Scale values in the direction of genes (rows)
+)
 
 #Normalize
 vsd_all <- vst(dds_deseq_all)
@@ -51,9 +76,45 @@ pca_all_b=pca_all+theme(
 )
 ggsave('PCA_all_nobg.png', pca_all_b, bg='transparent')
 
-
 res_all<-results(dds_deseq_all, contrast=c("SymState", "Symbiotic", "Non"),alpha=0.05)
 
 # summarize differentially expressed stats
 summary(res_all)
+
+#Convert to data frame
+df_res_all<-as.data.frame(res_all)
+
+#Creating heatmap for most differentially expressed
+df_res_all_05<-df_res_all[(df_res_all$padj<0.05) & (abs(df_res_all$log2FoldChange)>2),] #Filtering data based on colValues: High expression and no-log fold change
+
+df_res_all<-df_res_all_05[order(df_res_all_05$log2FoldChange,decreasing = TRUE),] #ordering the data
+View(df_res_all)
+
+mat_res_all<-assay(vsd_all)[rownames(df_res_all),rownames(sampleinfo2)] #might have to reload sampleinfo so rownames are ID
+colnames(mat_res_all)<-rownames(sampleinfo2)
+base_mean<-rowMeans(mat_res_all)
+mat.scaled.all<-t(apply(mat_res_all,1,scale))
+colnames(mat.scaled.all)<-colnames(mat_res_all)
+
+num_keep<-100 #keeping top and bottom 25 genes
+rows_keep<-c(seq(1:num_keep),seq((nrow(mat.scaled.all)-num_keep),nrow(mat.scaled.all)))
+
+my_colour2 = list(
+  Time = c(Sym = "#FCD603", Non = "#735d80")
+)
+
+heat_sym_v_non<-pheatmap(mat.scaled.all[rows_keep,],show_rownames = FALSE,name="logFC",cluster_cols = TRUE,annotation_col = sampleinfo2,annotation_colors = my_colour2,scale = 'row',colorRampPalette(c(
+  "deepskyblue",
+  "black",
+  "yellow"
+))(25
+))
+
+#Identify functional annotations of Deseq results
+df_res_all<-tibble::rownames_to_column(df_res_all,"Row.names")
+View(df_res_all)
+annos <- read.delim("Trinotate.xls", header = TRUE)
+annos_all<-merge(df_res_ang_ed,annos,by.x="Row.names",by.y="X.gene_id")
+View(annos_all)
+write.csv(anno_all,"annotated_deseq_all.csv")
 
