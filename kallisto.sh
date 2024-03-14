@@ -11,5 +11,5 @@ for FILE in ${input}
 #		#This sets prefixes for in/outs downstream# 
 	prefix=`echo ${FILE} | cut -d "/" -f 9 | cut -d "." -f 1`
 	
-		kallisto quant -i centroids.fasta.index -o kallisto_quant_${prefix} -t 8 ${FILE}/${prefix}_FP.fq.gz ${FILE}/${prefix}_RP.fq.gz 
+		kallisto quant -i trinity.fasta.index -o kallisto_quant_${prefix} -t 8 ${FILE}/${prefix}_FP.fq.gz ${FILE}/${prefix}_RP.fq.gz 
 done
