@@ -1,46 +1,80 @@
-dds_res<-results(dds_deseq, contrast=c("sample", "ANG", "CC"),alpha=0.05)
-summary(dds_res) #June27
-# out of 51598 with nonzero total read count
-# adjusted p-value < 0.05
-# LFC > 0 (up)       : 8753, 17%
-# LFC < 0 (down)     : 7034, 14%
-# outliers [1]       : 339, 0.66%
-# low counts [2]     : 2000, 3.9%
+library(DESeq2)
+library(tibble)
+library(dplyr)
+library(ggplot2)
 
-df_res<-as.data.frame(dds_res)
+# Differential Expression Analysis: ANG vs CC
+res_all <- results(dds_deseq_all, contrast = c("sample", "ANG", "CC"), alpha = 0.05)
+summary(res_all)
 
-df_res_lfc1<-df_res[(abs(df_res$log2FoldChange)<1),]
-View(df_res_lfc1)
-df_res_lfc1<-na.omit(df_res_lfc1)#19,151
+# Convert count matrix to tibble and merge with metadata
+cts_all_ed <- rownames_to_column(cts_all, "X")
+cts_non <- merge(mat4ed, cts_all_ed, by.x = "Row.names", by.y = "X")
+cts_non <- column_to_rownames(cts_non, "Row.names")
 
-df_res_lfc1_2<-df_res_lfc1[(abs(df_res_lfc1$padj)<0.05),]
-View(df_res_lfc1_2)
-mat4ed<-tibble::rownames_to_column(df_res_lfc1,"Row.names")
-View(mat4ed)
-mat4ed<-select(mat4ed,-2:-7)
+# Create DESeq dataset and filter low counts
+dds_sym <- DESeqDataSetFromMatrix(countData = cts_non, colData = sampleinfo_all, design = ~SymState)
+dds_deseq_all_sym <- DESeq(dds_sym)
+keep_all <- rowSums(counts(dds_deseq_all_sym) >= 30) >= 3
+dds_deseq_all_sym <- dds_deseq_all_sym[keep_all, ]
 
+# Differential Expression Analysis: Symbiotic vs Non-Symbiotic
+res_all_sym <- results(dds_deseq_all_sym, contrast = c("SymState", "Symbiotic", "Non"), alpha = 0.05)
+summary(res_all_sym)
 
-cts_ed <- tibble::rownames_to_column(cts, "VALUE")
-cts_non<-merge(mat4ed, cts_ed,by.x="Row.names",by.y="VALUE")
-View(cts_non)
-cts_non<-tibble::remove_rownames(cts_non)
-cts_non<-tibble::column_to_rownames(cts_non,"Row.names")
-View(cts_non)
+# Filter for non-significant, low fold-change genes
+df_sym_all <- as.data.frame(res_all)
+df_res_all_01 <- df_sym_all[(df_sym_all$padj > 0.05) & (abs(df_sym_all$log2FoldChange) < 1),]
+df_res_all_01 <- na.omit(df_res_all_01)
+df_res_all_01 <- df_res_all_01[order(df_res_all_01$log2FoldChange, decreasing = TRUE),]
+write.table(df_res_all_01, "Desq_table_ANG-CC_similar_expression_genes_p05_woMaleCC.txt", sep = "\t")
 
-dds_sym<-DESeqDataSetFromMatrix(countData = cts_non,colData = sampleinfo, design=~SymState)
+# Prepare filtered data for visualization
+mat4ed <- rownames_to_column(df_res_all_01, "Row.names")
+mat4ed <- select(mat4ed, -2:-7)
+cts_ed <- rownames_to_column(cts_all, "VALUE")
+cts_non <- merge(mat4ed, cts_ed, by.x = "Row.names", by.y = "VALUE")
+cts_non <- column_to_rownames(cts_non, "Row.names")
 
-dds_deseq_sym <- DESeq(dds_sym)
+# Perform DESeq again on filtered dataset
+dds_sym <- DESeqDataSetFromMatrix(countData = cts_non, colData = sampleinfo_all, design = ~SymState)
+dds_deseq_all_non <- DESeq(dds_sym)
 
-keep_sym <- rowSums(counts(dds_deseq_sym) >= 10)>=3
-dds_deseq_sym <- dds_deseq_sym[keep_sym,]
+# Variance Stabilization Transformation
+vsd_all <- vst(dds_deseq_all_non)
 
-res_sym<-results(dds_deseq_sym, contrast=c("SymState", "Symbiotic", "Non"),alpha=0.05)
+# PCA Plot
+pcaData <- plotPCA(vsd_all, intgroup = c("sample"), returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
 
-summary(res_sym)
-# out of 18691 with nonzero total read count
-# adjusted p-value < 0.05
-# LFC > 0 (up)       : 1933, 10%
-# LFC < 0 (down)     : 1277, 6.8%
-# outliers [1]       : 20, 0.11%
-# low counts [2]     : 359, 1.9%
+group_sex <- factor(sampleinfo_all$Sex)
+group_sample <- factor(sampleinfo_all$sample)
 
+pca_all <- ggplot(pcaData, aes(PC1, PC2, color = group_sample, shape = group_sex)) +
+  geom_point(size = 5) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  geom_point(aes(fill = group_sample, shape = group_sex), size = 5, color = "black") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12), legend.text = element_text(size = 12), legend.key.size = unit(2, "lines")) +
+  scale_shape_manual(values = c(21, 24)) +
+  scale_fill_manual(values = Okabe_Ito) +
+  guides(fill = guide_legend(override.aes = list(color = Okabe_Ito)))
+
+print(pca_all)
+
+# Additional Differential Expression Analysis
+res_all_sym <- results(dds_deseq_all_non, contrast = c("SymState", "Symbiotic", "Non"), alpha = 0.05)
+summary(res_all_sym)
+
+df_res_sym <- as.data.frame(res_all_sym)
+df_res_sym_01 <- df_res_sym[(abs(df_res_sym$log2FoldChange) > 2) & (df_res_sym$padj < 0.01),]
+df_res_sym_01 <- na.omit(df_res_sym_01)
+df_res_sym_01 <- df_res_sym_01[order(df_res_sym_01$log2FoldChange, decreasing = TRUE),]
+
+write.table(df_res_sym_01, "df_Sym_v_ALL_LFC>2.txt", sep = "\t")
+
+# Annotation of results
+df_res_all_01_ed <- rownames_to_column(df_res_sym_01, "X")
+res_all_anno <- merge(df_res_all_01_ed, annos, by.x = "X", by.y = "X.gene_id")
+write.table(res_all_anno, "Deseq_sym_all_anno.txt", sep = "\t")
