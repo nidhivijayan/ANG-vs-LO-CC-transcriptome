@@ -53,6 +53,16 @@ heatmap2 <- pheatmap(
   scale = "row" # Scale values in the direction of genes (rows)
 )
 
+res_all<-results(dds_deseq_all, contrast=c("sample", "ANG", "CC"),alpha=0.05)
+
+summary(res_all)
+# out of 46585 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 8044, 17%
+# LFC < 0 (down)     : 15930, 34%
+# outliers [1]       : 0, 0%
+# low counts [2]     : 10, 0.021%
+
 #Normalize
 vsd_all <- vst(dds_deseq_all)
 
@@ -108,11 +118,6 @@ v2<-ggplot(log2.cpm.f.pivot)+aes(x=Samples,y=expression,fill=Samples)+geom_violi
 #to make violin plot, whats the distribution of the data
 v1<-ggplot(log2.cpm.df.pivot)+aes(x=Samples,y=expression,fill=Samples)+geom_violin(trim=FALSE,show.legend = FALSE)+stat_summary(fun="median",geom="point",shape=95,size=10,color="black",show.legend = FALSE)+labs(y="log2 expression",x="sample",title = "Log2 Transcripts per million",subtitle = "unfiltered,non-normalized",caption=paste0("produced on",Sys.time()))+theme_bw()
 
-#Results of Deseq
-res_all<-results(dds_deseq_all, contrast=c("SymState", "Symbiotic", "Non"),alpha=0.05)
-
-# summarize differentially expressed stats
-summary(res_all)
 
 #Convert to data frame
 df_res_all<-as.data.frame(res_all)
@@ -136,12 +141,6 @@ my_colour2 = list(
   Time = c(Sym = "#FCD603", Non = "#735d80")
 )
 
-heat_sym_v_non<-pheatmap(mat.scaled.all[rows_keep,],show_rownames = FALSE,name="logFC",cluster_cols = TRUE,annotation_col = sampleinfo2,annotation_colors = my_colour2,scale = 'row',colorRampPalette(c(
-  "deepskyblue",
-  "black",
-  "yellow"
-))(25
-))
 
 #TO make volcano plot
 threshold<- df_res_all$padj< 0.05 & abs(df_res_all$log2FoldChange) > 0.58
